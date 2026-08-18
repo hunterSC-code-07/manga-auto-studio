@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+venv/
+node_modules/
+dist/
+*.pt
+*.safetensors
+*.bin
+profiles/
+Needs_Review/
+*.png
+*.jpg
