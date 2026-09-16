@@ -1,10 +1,22 @@
+import sys
 import os
 import io 
 import base64 
 import asyncio
 import threading
-import tkinter as tk
-from tkinter import filedialog
+import subprocess
+
+# Ensure local directory takes precedence in sys.path
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+try:
+    import tkinter as tk
+    from tkinter import filedialog
+    HAS_TK = True
+except (ImportError, Exception):
+    HAS_TK = False
+    tk = None
+    filedialog = None
 from fastapi import FastAPI, WebSocket, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -87,21 +99,54 @@ def save_config(req: SaveRequest):
 
 @app.get("/api/browse/folder")
 def browse_folder():
-    root = tk.Tk()
-    root.withdraw()
-    root.attributes('-topmost', True)
-    folder = filedialog.askdirectory()
-    root.destroy()
-    return {"path": folder}
+    if HAS_TK:
+        try:
+            root = tk.Tk()
+            root.withdraw()
+            root.attributes('-topmost', True)
+            folder = filedialog.askdirectory()
+            root.destroy()
+            return {"path": folder or ""}
+        except Exception:
+            pass
+    try:
+        cmd = [
+            "powershell", "-NoProfile", "-Command",
+            "[System.Reflection.Assembly]::LoadWithPartialName('System.Windows.Forms') | Out-Null; "
+            "$f = New-Object System.Windows.Forms.FolderBrowserDialog; "
+            "$f.Description = 'Select Folder'; "
+            "$f.ShowNewFolderButton = $true; "
+            "if ($f.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) { Write-Output $f.SelectedPath }"
+        ]
+        res = subprocess.run(cmd, capture_output=True, text=True, creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
+        return {"path": res.stdout.strip()}
+    except Exception as e:
+        return {"path": "", "error": str(e)}
 
 @app.get("/api/browse/file")
 def browse_file():
-    root = tk.Tk()
-    root.withdraw()
-    root.attributes('-topmost', True)
-    file = filedialog.askopenfilename()
-    root.destroy()
-    return {"path": file}
+    if HAS_TK:
+        try:
+            root = tk.Tk()
+            root.withdraw()
+            root.attributes('-topmost', True)
+            file = filedialog.askopenfilename()
+            root.destroy()
+            return {"path": file or ""}
+        except Exception:
+            pass
+    try:
+        cmd = [
+            "powershell", "-NoProfile", "-Command",
+            "[System.Reflection.Assembly]::LoadWithPartialName('System.Windows.Forms') | Out-Null; "
+            "$f = New-Object System.Windows.Forms.OpenFileDialog; "
+            "$f.Title = 'Select File'; "
+            "if ($f.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) { Write-Output $f.FileName }"
+        ]
+        res = subprocess.run(cmd, capture_output=True, text=True, creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
+        return {"path": res.stdout.strip()}
+    except Exception as e:
+        return {"path": "", "error": str(e)}
 
 
 # --- PIPELINE EXECUTION ---
@@ -214,8 +259,6 @@ class VLMConfig(BaseModel):
     safe_zones: bool
     use_smart_extract: bool
     use_full_meta: bool
-    use_memory: bool
-    external_memory: str
     autofit: bool
     overwrite: bool
 
@@ -239,10 +282,7 @@ async def start_vlm(config: VLMConfig):
         except Exception:
             pass
             
-    # The VLM logic also returns memory updates, we'll stream them as special logs
-    def mem_cb(txt): asyncio.run(manager.broadcast({"type": "log", "data": f"🧠 MEMORY UPDATED: {txt}"}))
-
-    callbacks = {'log': log_cb, 'progress': prog_cb, 'preview': prev_cb, 'memory': mem_cb}
+    callbacks = {'log': log_cb, 'progress': prog_cb, 'preview': prev_cb}
 
     def run_job():
         log_cb("👁️ Initializing VLM Comic Pipeline...")

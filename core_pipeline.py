@@ -6,6 +6,7 @@ import sys
 import json
 import re
 import base64
+import io
 import requests
 import concurrent.futures
 import threading
@@ -81,7 +82,7 @@ class PipelineManager:
         bubble_cx = bubble_x + (bubble_w / 2)
         bubble_cy = bubble_y + (bubble_h / 2)
         target_x = face_cx
-        target_y = y1 + ((y2 - y1) * 0.2)
+        target_y = y1 + ((y2 - y1) * 0.8) # Point at the mouth area
         angle = math.atan2(target_y - bubble_cy, target_x - bubble_cx)
 
         rx, ry = bubble_w / 2, bubble_h / 2
@@ -96,45 +97,24 @@ class PipelineManager:
         base2_x = bubble_cx + (rx * math.cos(angle + tail_thick))
         base2_y = bubble_cy + (ry * math.sin(angle + tail_thick))
 
-        # --- 🌟 NEW: BEZIER CURVE MANGA TAIL LOGIC 🌟 ---
-        def make_bezier(p0, p1, p2, steps=20):
-            return [
-                (
-                    (1-t/steps)**2 * p0[0] + 2*(1-t/steps)*(t/steps) * p1[0] + (t/steps)**2 * p2[0],
-                    (1-t/steps)**2 * p0[1] + 2*(1-t/steps)*(t/steps) * p1[1] + (t/steps)**2 * p2[1]
-                ) for t in range(steps + 1)
-            ]
+        # --- 🌟 SIMPLE TRIANGULAR TAIL LOGIC 🌟 ---
+        # Generate the straight outer triangle for the black outline
+        outer_triangle = [(base1_x, base1_y), (tip_x, tip_y), (base2_x, base2_y)]
 
-        # Calculate a control point to give the tail a nice "swoop"
-        dir_x, dir_y = tip_x - bubble_cx, tip_y - bubble_cy
-        perp_x, perp_y = -dir_y, dir_x
-        length = math.hypot(perp_x, perp_y)
-        if length != 0:
-            perp_x, perp_y = perp_x / length, perp_y / length
+        # Pull the white inner tip back dynamically to prevent artifacting
+        inner_rollback = max(2.0, min(6.0, tail_len * 0.15))
+        inner_tip_x = tip_x - (inner_rollback * math.cos(angle))
+        inner_tip_y = tip_y - (inner_rollback * math.sin(angle))
         
-        # The bend intensity (40% of the tail length)
-        bend_amount = tail_len * 0.4
-        control_x = bubble_cx + (dir_x * 0.5) + (perp_x * bend_amount)
-        control_y = bubble_cy + (dir_y * 0.5) + (perp_y * bend_amount)
-
-        # Generate the smooth outer polygon for the black outline
-        outer_curve = make_bezier((base1_x, base1_y), (control_x, control_y), (tip_x, tip_y)) + \
-                      make_bezier((tip_x, tip_y), (control_x, control_y), (base2_x, base2_y))[1:]
-
-        # Pull the white inner tip back slightly so the border thickness is maintained
-        inner_tip_x = tip_x - (6 * math.cos(angle))
-        inner_tip_y = tip_y - (6 * math.sin(angle))
-        
-        # Generate the smooth inner polygon for the white fill
-        inner_curve = make_bezier((base1_x, base1_y), (control_x, control_y), (inner_tip_x, inner_tip_y)) + \
-                      make_bezier((inner_tip_x, inner_tip_y), (control_x, control_y), (base2_x, base2_y))[1:]
+        # Generate the straight inner triangle for the white fill
+        inner_triangle = [(base1_x, base1_y), (inner_tip_x, inner_tip_y), (base2_x, base2_y)]
 
         # Draw the Outer Shape (Black)
-        draw.polygon(outer_curve, fill=(0,0,0,255))
+        draw.polygon(outer_triangle, fill=(0,0,0,255))
         draw.ellipse([bubble_x, bubble_y, bubble_x + bubble_w, bubble_y + bubble_h], fill=(0,0,0,255))
         
         # Draw the Inner Shape (White)
-        draw.polygon(inner_curve, fill=(255,255,255,255))
+        draw.polygon(inner_triangle, fill=(255,255,255,255))
         draw.ellipse([bubble_x + 4, bubble_y + 4, bubble_x + bubble_w - 4, bubble_y + bubble_h - 4], fill=(255,255,255,255))
         
         # Draw the Text
@@ -317,7 +297,7 @@ class PipelineManager:
         if not valid_files: return False, "No new images found to process. (Or uncheck 'Resume' to overwrite)."
 
         total_files = len(valid_files)
-        running_story_context = []
+        http_session = requests.Session()
 
         for i, filename in enumerate(valid_files):
             if stop_event.is_set(): # --- NEW: STOP CHECK ---
@@ -343,8 +323,17 @@ class PipelineManager:
             except Exception as e:
                 callbacks['log'](f"Error opening image: {e}"); continue
 
-            with open(img_path, "rb") as img_file:
-                b64_img = base64.b64encode(img_file.read()).decode('utf-8')
+            # Downscale image to a reasonable resolution for VLM to prevent VRAM fragmentation/leaks
+            try:
+                vlm_img = img_raw.copy().convert("RGB")
+                vlm_img.thumbnail((1024, 1024), Image.Resampling.LANCZOS)
+                buffered = io.BytesIO()
+                vlm_img.save(buffered, format="JPEG", quality=85)
+                b64_img = base64.b64encode(buffered.getvalue()).decode('utf-8')
+                vlm_img.close()
+            except Exception as e:
+                callbacks['log'](f"Error compressing image for VLM: {e}")
+                continue
 
             extracted_names = ""
             if cfg['use_smart_extract']:
@@ -357,13 +346,6 @@ class PipelineManager:
                 meta_data = img_info.get("parameters", img_info.get("prompt", str(img_info)[:2500]))
                 meta_context = f"\n\nIMAGE CONCEPT DATA: {str(meta_data)[:2500]}"
             
-            story_memory = ""
-            ext_mem = ""
-            if cfg.get('use_memory', True):
-                story_memory = "\n\nSTORY SO FAR:\n" + "\n".join(running_story_context[-4:]) if running_story_context else ""
-                user_memory = cfg['external_memory']
-                ext_mem = f"\n\nGLOBAL STORY CONTEXT: {user_memory}" if user_memory else ""
-
             try:
                 # ==========================================
                 # 2-STEP AGENTIC CHAINING
@@ -382,11 +364,11 @@ class PipelineManager:
                         "temperature": cfg['temp'], "max_tokens": cfg['tokens']
                     }
                     callbacks['log']("-> Agent 1 (VLM) is analyzing the image...")
-                    v1_resp = requests.post(cfg['api_url'], json=vlm_payload).json()
+                    v1_resp = http_session.post(cfg['api_url'], json=vlm_payload).json()
                     scene_description = v1_resp.get("choices", [{}])[0].get("message", {}).get("content", "")
                     callbacks['log'](f"-> Vision Report: {scene_description}")
                     
-                    user_prompt_text = f"Based on this scene description: '{scene_description}', generate JSON dialogue for Character A and B.{meta_context}{extracted_names}{story_memory}{ext_mem}"
+                    user_prompt_text = f"Based on this scene description: '{scene_description}', generate JSON dialogue for Character A and B.{meta_context}{extracted_names}"
                     llm_payload = {
                         "model": "local-model",
                         "messages": [
@@ -396,13 +378,13 @@ class PipelineManager:
                         "temperature": cfg['temp'], "max_tokens": cfg['tokens']
                     }
                     callbacks['log']("-> Agent 2 (LLM) is writing the script...")
-                    response = requests.post(cfg['llm_url'], json=llm_payload)
+                    response = http_session.post(cfg['llm_url'], json=llm_payload)
                 
                 # ==========================================
                 # STANDARD SINGLE VLM (Pure Fallback)
                 # ==========================================
                 else:
-                    user_prompt_text = f"Analyze this image and generate dialogue for Character A (Top) and Character B (Bottom) that logically continues the narrative.{meta_context}{extracted_names}{story_memory}{ext_mem}"
+                    user_prompt_text = f"Analyze this image and generate dialogue for Character A (Top) and Character B (Bottom) that logically continues the narrative.{meta_context}{extracted_names}"
                     payload = {
                         "model": "local-model",
                         "messages": [
@@ -411,7 +393,7 @@ class PipelineManager:
                         ],
                         "temperature": cfg['temp'], "max_tokens": cfg['tokens']
                     }
-                    response = requests.post(cfg['api_url'], json=payload)
+                    response = http_session.post(cfg['api_url'], json=payload)
 
                 # --- Pure JSON Parsing ---
                 if response.status_code != 200:
@@ -441,10 +423,6 @@ class PipelineManager:
 
                 callbacks['log'](f"Script Success! Char A: '{char_a}' | Char B: '{char_b}'")
                 
-                new_entry = f"Panel {i+1} -> Top: '{char_a}' | Bottom: '{char_b}'"
-                running_story_context.append(new_entry)
-                callbacks['memory'](new_entry)
-                
             except Exception as e:
                 callbacks['log'](f"VLM critical pipeline failure: {e}")
                 continue 
@@ -472,6 +450,8 @@ class PipelineManager:
 
             callbacks['preview'](img_pil)
             img_pil.convert("RGB").save(os.path.join(out_dir, filename))
+            img_pil.close()
+            img_raw.close()
             callbacks['progress'](i+1, total_files)
 
         return True, "Finished VLM Batch!"
