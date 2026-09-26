@@ -24,7 +24,7 @@ class AIManager:
             "max_tokens": tokens
         }
         try:
-            response = requests.post(api_url, json=payload, headers={"Content-Type": "application/json"})
+            response = requests.post(api_url, json=payload, headers={"Content-Type": "application/json"}, timeout=120)
             response.raise_for_status()
             return True, response.json()["choices"][0]["message"]["content"]
         except Exception as e:

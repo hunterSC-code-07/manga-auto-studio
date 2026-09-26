@@ -123,7 +123,7 @@ class CullerManager:
                         "max_tokens": 15000
                     }
                     
-                    res = requests.post(vlm_url, json=payload).json()
+                    res = requests.post(vlm_url, json=payload, timeout=120).json()
                     raw_text = res.get('choices', [{}])[0].get('message', {}).get('content', '')
                     
                     json_match = re.search(r'\{.*\}', raw_text, re.DOTALL)

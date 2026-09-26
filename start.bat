@@ -4,5 +4,9 @@
 start "Frontend Server" /d "frontend" npm run dev
 
 :: Runs the Python server in the original window.
-python server.py
+if exist "..\python_embeded\python.exe" (
+    ..\python_embeded\python.exe server.py
+) else (
+    python server.py
+)
 pause

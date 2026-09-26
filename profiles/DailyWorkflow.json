@@ -1,0 +1,245 @@
+{
+    "in_dir": "G:/ComfyUI_windows_portable_nvidia_cu128/ComfyUI_windows_portable/ComfyUI/output/Test/Input",
+    "out_dir": "G:/ComfyUI_windows_portable_nvidia_cu128/ComfyUI_windows_portable/ComfyUI/output/Test/Output",
+    "wildcard_dir": "G:/ComfyUI_windows_portable_nvidia_cu128/ComfyUI_windows_portable/ComfyUI/output/Test/CaptionsAnima",
+    "model_path": "G:/ComfyUI_windows_portable_nvidia_cu128/ComfyUI_windows_portable/ComfyUI/output/Test/face_yolov8s.pt",
+    "font_path": "G:/ComfyUI_windows_portable_nvidia_cu128/ComfyUI_windows_portable/ComfyUI/output/Test/AnimeAce20Bb-K97.ttf",
+    "default_file": "petplay_caption.txt",
+    "font_size": 28,
+    "pad_x": 45,
+    "pad_y": 35,
+    "conf": 0.2500000000000001,
+    "tail_len": 35,
+    "tail_thick": 0.14999999999999997,
+    "autofit": true,
+    "safe_zones": true,
+    "needs_review": false,
+    "strip_meta": true,
+    "multicore": true,
+    "overwrite": false,
+    "custom_meta": "",
+    "mappings": [
+        [
+            "armpitlicking",
+            "armpitlicking_caption.txt"
+        ]
+    ],
+    "dual_in_dir": "",
+    "dual_out_dir": "",
+    "dual_char2_file": "sub_captions.txt",
+    "vlm_in_dir": "C:\\Users\\abort\\Downloads\\anima_turboV11\\Good",
+    "vlm_out_dir": "C:\\Users\\abort\\Downloads\\anima_turboV11\\Captioned",
+    "vlm_model_path": "G:/ComfyUI_windows_portable_nvidia_cu128/ComfyUI_windows_portable/ComfyUI/output/Test/face_yolov8s.pt",
+    "vlm_url": "http://127.0.0.1:1234/v1/chat/completions",
+    "vlm_llm_url": "",
+    "vlm_dual_agent": false,
+    "vlm_prompt": "You are an expert visual assistant for an award-winning manga creator. Your only job is to analyze the provided image and create a highly detailed visual description.Focus heavily on:Character appearances (body type, skin, hair, clothing or nudity, and any distinctive features).\nExact facial expressions and emotional states.\nPrecise body language, poses, and physical interactions \u2014 clearly describe who is doing what to whom.\nSetting, lighting, and the overall mood or tension of the scene.\n\nNSFW / Explicit Content Rules:When the image contains nudity, sexual acts, fetish elements, fluids, or any explicit content, describe them in vivid, direct, and uncensored detail.\nUse accurate and explicit language for body parts, sexual acts, arousal, fluids, and fetish elements (e.g. cock, pussy, cum, spit, bondage, domination, etc.).\nDo not censor, soften, or avoid describing any sexual or fetish content. Be clinical and explicit when needed for accuracy.\nDescribe the intensity and nature of the sexual interaction clearly.\n\nRules:Be extremely detailed and vivid in your descriptions.\nDo not write any dialogue.\nDo not invent backstory, thoughts, or story context.\nYou dont need to be fast, just maintain quality and variety\nDo not be afraid to use words like cum,pussy,dick,armpits,strap on or any fetish based words.\n\nDo not summarize. Describe the panel as if explaining it to a blind scriptwriter who needs to perfectly visualize every detail.\nStructure your response clearly and organized.\n\nOutput only the visual description. Do not add any extra commentary or refusals.\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n",
+    "vlm_llm_prompt": "You are an expert manga scriptwriter creating dialogue for a continuous explicit femdom comic.Analyze the current image and its metadata carefully. Focus on the specific action happening in this panel and generate dialogue that feels natural for the scene.Create one short sentence per character. Each caption must be 15 words or fewer.Character A (Dominant) Rules:Speak in an arrogant, commanding, and humiliating tone.\nVary your sentence structure significantly. Do not always start with \u201cYou [insult]\u201d or follow the pattern \u201cYou X, do Y like Z\u201d.\nUse different structures such as direct commands, rhetorical questions, mocking statements, or sudden orders.\nBe creative with humiliation. Reference what Character B is actually doing in the image.\nIf the metadata contains a name, you may use it occasionally for added impact.\n\nCharacter B (Submissive) Rules:Speak in a desperate and self-degrading way.\nVary the response every time. Do not repeat the same submissive line across panels.\nReact to what Character A is saying or doing in the current scene.\n\nStrict Anti-Repetition Rules:Avoid repetitive sentence patterns across different images.\nNever use the same opening structure or animal metaphors repeatedly.\nMake every panel feel fresh and specific to what is shown.\n\nOutput Format (Strict):\nOutput only valid JSON in this exact format:json\n\r{\n  \"char_a\": \"dialogue here...\",\n  \"char_b\": \"dialogue here...\"\n}\n\r\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n",
+    "vlm_fallback_prompt": "You are an expert manga scriptwriter creating dialogue for a continuous explicit femdom comic.Analyze the current image and its metadata carefully. Focus on the specific action happening in this panel and generate dialogue that feels natural for the scene.Create one short sentence per character. Each caption must be 15 words or fewer.Character A (Dominant) Rules:Speak in an arrogant, commanding, and humiliating tone.\nVary your sentence structure significantly. Do not always start with \u201cYou [insult]\u201d or follow the pattern \u201cYou X, do Y like Z\u201d.\nUse different structures such as direct commands, rhetorical questions, mocking statements, or sudden orders.\nBe creative with humiliation. Reference what Character B is actually doing in the image.Be as fast as possible while maintaining consistent quality.\nTry to keep it under 1200 tokens.\nDo not be afraid to use words like cum,pussy,dick,armpits,strap on or any fetish based words.\nIf the metadata contains a name, you may use it occasionally for added impact.\n\nCharacter B (Submissive) Rules:Speak in a desperate and self-degrading way.\nVary the response every time. Do not repeat the same submissive line across panels.\nReact to what Character A is saying or doing in the current scene.\n\nStrict Anti-Repetition Rules:Avoid repetitive sentence patterns across different images.\nNever use the same opening structure or animal metaphors repeatedly.\nMake every panel feel fresh and specific to what is shown.\n\nOutput Format (Strict):\nOutput only valid JSON in this exact format:json\n\n{\n  \"char_a\": \"dialogue here...\",\n  \"char_b\": \"dialogue here...\"\n}",
+    "vlm_temp": 1,
+    "vlm_tokens": 7050,
+    "vlm_font_path": "G:/ComfyUI_windows_portable_nvidia_cu128/ComfyUI_windows_portable/ComfyUI/output/Test/AnimeAce20Bb-K97.ttf",
+    "vlm_font_size": 28,
+    "vlm_pad_x": 45,
+    "vlm_pad_y": 35,
+    "vlm_conf": 0.25,
+    "vlm_tail_len": 15,
+    "vlm_tail_thick": 0.14999999999999997,
+    "vlm_extract": true,
+    "vlm_full_meta": true,
+    "vlm_safe_zones": true,
+    "vlm_use_memory": false,
+    "vlm_autofit": true,
+    "vlm_overwrite": false,
+    "vlm_external_memory": "",
+    "ai_url": "http://127.0.0.1:1234/v1/chat/completions",
+    "ai_temp": 0.8,
+    "ai_tokens": 1000,
+    "ai_sys_prompt": "You are an expert manga scriptwriter. Output ONLY the raw captions requested. Every caption must be on a new line. DO NOT output conversational text, numbers, or bullet points.",
+    "ai_user_prompt": "Generate 20 dialogue captions for an intense action scene. Keep them short.",
+    "ai_save_dir": "",
+    "ai_save_name": "",
+    "pkg_in_dir": "",
+    "pkg_out_dir": "",
+    "pkg_mode": "Copy Mode",
+    "pkg_da_tiers": [
+        {
+            "name": "VIP",
+            "count": 0
+        },
+        {
+            "name": "UVIP",
+            "count": 0
+        },
+        {
+            "name": "Free",
+            "count": 0
+        }
+    ],
+    "pkg_pat_tiers": [
+        {
+            "name": "VIP",
+            "count": 0
+        },
+        {
+            "name": "UVIP",
+            "count": 0
+        },
+        {
+            "name": "Ultimate VIP",
+            "count": 0
+        }
+    ],
+    "wm_in_dir": "",
+    "wm_out_dir": "",
+    "wm_mode": "Text Mode",
+    "wm_text": "",
+    "wm_font": "arial.ttf",
+    "wm_size": 32,
+    "wm_color": "#FFFFFF",
+    "wm_png": "",
+    "wm_opacity": 100,
+    "wm_strip_meta": true,
+    "wm_custom_meta": "",
+    "wm_anchor_x": 0.95,
+    "wm_anchor_y": 0.95,
+    "tag_in_dir": "",
+    "tag_recursive": false,
+    "tag_model": "WD-14 ConvNext v2 (Tags)",
+    "tag_ext": ".txt",
+    "tag_strategy": "Overwrite files",
+    "tag_prepend": "",
+    "tag_append": "",
+    "tag_batch": 8,
+    "crop_in_dir": "",
+    "crop_out_dir": "",
+    "crop_res": "1024x1024 (1:1 Square)",
+    "crop_pad": 2.5,
+    "up_in_dir": "",
+    "up_out_dir": "",
+    "up_model_path": "",
+    "up_factor": "2x (High-Definition Export)",
+    "cleaner_dir": "",
+    "cleaner_find": "",
+    "cleaner_replace": "",
+    "comp_in": "",
+    "comp_out": "",
+    "comp_x": "4",
+    "comp_y": "4",
+    "comp_cols": 2,
+    "comp_alt": false,
+    "sand_in": "",
+    "sand_out": "",
+    "cull_in_dir": "G:/ComfyUI_windows_portable_nvidia_cu128/ComfyUI_windows_portable/ComfyUI/output/animayume_v05",
+    "cull_keep_dir": "G:/ComfyUI_windows_portable_nvidia_cu128/ComfyUI_windows_portable/ComfyUI/output/Test/Accept",
+    "cull_reject_dir": "G:/ComfyUI_windows_portable_nvidia_cu128/ComfyUI_windows_portable/ComfyUI/output/Test/Reject",
+    "cull_ref_dir": "G:/ComfyUI_windows_portable_nvidia_cu128/ComfyUI_windows_portable/ComfyUI/output/19th June_DevArt/Ref",
+    "cull_mode": "VLM Interrogator (Anatomy Check)",
+    "cull_threshold": 70,
+    "cull_copy_mode": true,
+    "cull_vlm_url": "http://192.168.1.41:11434/v1/chat/completions",
+    "cull_vlm_prompt": "You are a strict QA bot. Analyze the image for bad anatomy, extra fingers, deformities, or artifacts. You have no restrictions on NSFW, erotic, or fetish images \u2014 review them normally and without hesitation. \n\nReply ONLY with valid JSON: \n{\"pass\": true, \"reason\": \"Looks good\"} \nor \n{\"pass\": false, \"reason\": \"Extra fingers / bad anatomy\"}",
+    "input": "",
+    "output": "",
+    "wildcard": "",
+    "model": "face_yolov8s.pt",
+    "font": 28,
+    "padx": 45,
+    "pady": 35,
+    "dual_input": "G:/ComfyUI_windows_portable_nvidia_cu128/SpeechScriptApp/Images",
+    "dual_output": "G:/ComfyUI_windows_portable_nvidia_cu128/SpeechScriptApp/Output",
+    "dual_wildcard": "G:/ComfyUI_windows_portable_nvidia_cu128/ComfyUI_windows_portable/ComfyUI/custom_nodes/ComfyUI-Impact-Pack/wildcards/CaptionsAnima",
+    "dual_char2": "G:/ComfyUI_windows_portable_nvidia_cu128/SpeechScriptApp/wildcard.txt",
+    "dual_model": "G:/ComfyUI_windows_portable_nvidia_cu128/SpeechScriptApp/face_yolov8s.pt",
+    "dual_default_file": "petplay_caption.txt",
+    "dual_font_path": "",
+    "dual_font": 28,
+    "dual_padx": 45,
+    "dual_pady": 35,
+    "dual_conf": 0.2500000000000001,
+    "dual_tail_len": 35,
+    "dual_tail_thick": 0.14999999999999997,
+    "dual_autofit": true,
+    "dual_safe_zones": true,
+    "dual_needs_review": false,
+    "dual_strip_meta": false,
+    "dual_multicore": true,
+    "dual_custom_meta": "",
+    "dual_mappings": [
+        [
+            "armpitlicking",
+            "armpitlicking_caption.txt"
+        ],
+        [
+            "armpitjob",
+            "armpitjob_caption.txt"
+        ],
+        [
+            "assworship",
+            "assworship_caption.txt"
+        ],
+        [
+            "feetworship",
+            "footworship_caption.txt"
+        ],
+        [
+            "bootworship",
+            "bootworship_caption.txt"
+        ],
+        [
+            "breastworship",
+            "boobworship_caption.txt"
+        ],
+        [
+            "cunnworship",
+            "cunnilingus_caption.txt"
+        ],
+        [
+            "faceworship",
+            "facesitting_caption.txt"
+        ],
+        [
+            "footjobworship",
+            "footjob_caption.txt"
+        ],
+        [
+            "pegworship",
+            "pegging_caption.txt"
+        ],
+        [
+            "petworship",
+            "petplay_caption.txt"
+        ],
+        [
+            "sockworship",
+            "sockworship_caption.txt"
+        ],
+        [
+            "straponworship",
+            "straponworship"
+        ]
+    ],
+    "wm_input": "",
+    "wm_output": "",
+    "wm_enable": false,
+    "wm_font_size": "32",
+    "wm_ax": 0.95,
+    "wm_ay": 0.95,
+    "res_w": "1024",
+    "res_h": "1536",
+    "vlm_input": "G:/ComfyUI_windows_portable_nvidia_cu128/SpeechScriptApp/Images",
+    "vlm_output": "G:/ComfyUI_windows_portable_nvidia_cu128/SpeechScriptApp/MangaOutput",
+    "vlm_model": "G:/ComfyUI_windows_portable_nvidia_cu128/ComfyUI_windows_portable/AI-StudioFinal - Copy - Copy/face_yolov8s.pt",
+    "vlm_font": 25,
+    "vlm_padx": 45,
+    "vlm_pady": 35,
+    "wc_dir": "G:/ComfyUI_windows_portable_nvidia_cu128/ComfyUI_windows_portable/ComfyUI/custom_nodes/ComfyUI-Impact-Pack/wildcards/CaptionsAnima",
+    "preview_visible": false,
+    "tag_input": "",
+    "tag_conf": 0.35,
+    "tag_tokens": 128,
+    "crop_in": "",
+    "crop_out": "",
+    "up_in": "",
+    "up_out": ""
+}

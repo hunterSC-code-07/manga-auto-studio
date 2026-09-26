@@ -300,158 +300,160 @@ class PipelineManager:
         http_session = requests.Session()
 
         for i, filename in enumerate(valid_files):
-            if stop_event.is_set(): # --- NEW: STOP CHECK ---
-                callbacks['log']("🛑 Process Terminated by User.")
-                break
+            while True:
+                if stop_event.is_set(): # --- NEW: STOP CHECK ---
+                    callbacks['log']("🛑 Process Terminated by User.")
+                    return False, 'Process Terminated by User.'
                 
-            pause_event.wait()
-            if stop_event.is_set(): break
+                pause_event.wait()
+                if stop_event.is_set(): return False, 'Process Terminated by User.'
             
-            # ... (Rest of the loop stays exactly the same)
-            img_path = os.path.join(in_dir, filename)
-            callbacks['log'](f"\n[{i+1}/{total_files}] Connecting to VLM for {filename}...")
+                # ... (Rest of the loop stays exactly the same)
+                img_path = os.path.join(in_dir, filename)
+                callbacks['log'](f"\n[{i+1}/{total_files}] Connecting to VLM for {filename}...")
 
-            try:
-                img_raw = Image.open(img_path)
-                img_info = img_raw.info
-                img_pil = img_raw.convert("RGBA")
-                draw = ImageDraw.Draw(img_pil)
-                edge_map = None
-                if cfg['safe_zones'] and HAS_CV2:
-                    open_cv_image = np.array(img_pil.convert('RGB'))[:, :, ::-1].copy()
-                    edge_map = cv2.Canny(cv2.cvtColor(open_cv_image, cv2.COLOR_BGR2GRAY), 50, 150)
-            except Exception as e:
-                callbacks['log'](f"Error opening image: {e}"); continue
-
-            # Downscale image to a reasonable resolution for VLM to prevent VRAM fragmentation/leaks
-            try:
-                vlm_img = img_raw.copy().convert("RGB")
-                vlm_img.thumbnail((1024, 1024), Image.Resampling.LANCZOS)
-                buffered = io.BytesIO()
-                vlm_img.save(buffered, format="JPEG", quality=85)
-                b64_img = base64.b64encode(buffered.getvalue()).decode('utf-8')
-                vlm_img.close()
-            except Exception as e:
-                callbacks['log'](f"Error compressing image for VLM: {e}")
-                continue
-
-            extracted_names = ""
-            if cfg['use_smart_extract']:
-                matches = re.findall(r'(?:woman|man|girl|boy|character)\s+is\s+([a-zA-Z0-9\s]+?)(?:\s+and|\s*,|\.|$)', str(img_info), re.IGNORECASE)
-                valid_names = [m.strip().title() for m in matches if len(m.strip()) > 1]
-                if valid_names: extracted_names = f"\n\nCRITICAL CONTEXT: The metadata identifies characters as: {', '.join(valid_names)}."
-
-            meta_context = ""
-            if cfg['use_full_meta']:
-                meta_data = img_info.get("parameters", img_info.get("prompt", str(img_info)[:2500]))
-                meta_context = f"\n\nIMAGE CONCEPT DATA: {str(meta_data)[:2500]}"
-            
-            try:
-                # ==========================================
-                # 2-STEP AGENTIC CHAINING
-                # ==========================================
-                if cfg.get('dual_agent'):
-                    vlm_user_prompt = f"Describe the characters, their expressions, and the action happening in this scene in explicit detail.{meta_context}{extracted_names}"
-                    vlm_payload = {
-                        "model": "local-model",
-                        "messages": [
-                            {"role": "system", "content": cfg['sys_prompt']},
-                            {"role": "user", "content": [
-                                {"type": "text", "text": vlm_user_prompt},
-                                {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64_img}"}}
-                            ]}
-                        ],
-                        "temperature": cfg['temp'], "max_tokens": cfg['tokens']
-                    }
-                    callbacks['log']("-> Agent 1 (VLM) is analyzing the image...")
-                    v1_resp = http_session.post(cfg['api_url'], json=vlm_payload).json()
-                    scene_description = v1_resp.get("choices", [{}])[0].get("message", {}).get("content", "")
-                    callbacks['log'](f"-> Vision Report: {scene_description}")
-                    
-                    user_prompt_text = f"Based on this scene description: '{scene_description}', generate JSON dialogue for Character A and B.{meta_context}{extracted_names}"
-                    llm_payload = {
-                        "model": "local-model",
-                        "messages": [
-                            {"role": "system", "content": cfg.get('llm_sys_prompt', cfg['sys_prompt'])},
-                            {"role": "user", "content": user_prompt_text} 
-                        ],
-                        "temperature": cfg['temp'], "max_tokens": cfg['tokens']
-                    }
-                    callbacks['log']("-> Agent 2 (LLM) is writing the script...")
-                    response = http_session.post(cfg['llm_url'], json=llm_payload)
-                
-                # ==========================================
-                # STANDARD SINGLE VLM (Pure Fallback)
-                # ==========================================
-                else:
-                    user_prompt_text = f"Analyze this image and generate dialogue for Character A (Top) and Character B (Bottom) that logically continues the narrative.{meta_context}{extracted_names}"
-                    payload = {
-                        "model": "local-model",
-                        "messages": [
-                            {"role": "system", "content": cfg.get('fallback_prompt', cfg['sys_prompt'])},
-                            {"role": "user", "content": [{"type": "text", "text": user_prompt_text}, {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64_img}"}}]}
-                        ],
-                        "temperature": cfg['temp'], "max_tokens": cfg['tokens']
-                    }
-                    response = http_session.post(cfg['api_url'], json=payload)
-
-                # --- Pure JSON Parsing ---
-                if response.status_code != 200:
-                    callbacks['log'](f"❌ API Error {response.status_code}: {response.text}")
-                    continue
-                    
-                response_data = response.json()
-                raw_response = response_data.get("choices", [{}])[0].get("message", {}).get("content", "")
-                
-                if not raw_response or not str(raw_response).strip():
-                    callbacks['log'](f"❌ API returned an empty string. Raw Output: {response_data}")
-                    continue
-
-                json_match = re.search(r'\{.*\}', raw_response, re.DOTALL)
-                clean_json_str = json_match.group(0) if json_match else raw_response.strip()
-                clean_json_str = re.sub(r'```json\s*|\s*```', '', clean_json_str).strip()
-                
                 try:
-                    vlm_data = json.loads(clean_json_str)
-                except json.JSONDecodeError:
-                    callbacks['log']("⚠️ AI failed to format JSON. Attempting raw text recovery...")
-                    vlm_data = {"char_a": raw_response.strip(), "char_b": "..."}
+                    img_raw = Image.open(img_path)
+                    img_info = img_raw.info
+                    img_pil = img_raw.convert("RGBA")
+                    draw = ImageDraw.Draw(img_pil)
+                    edge_map = None
+                    if cfg['safe_zones'] and HAS_CV2:
+                        open_cv_image = np.array(img_pil.convert('RGB'))[:, :, ::-1].copy()
+                        edge_map = cv2.Canny(cv2.cvtColor(open_cv_image, cv2.COLOR_BGR2GRAY), 50, 150)
+                except Exception as e:
+                    callbacks['log'](f"Error opening image: {e}"); continue
+
+                # Downscale image to a reasonable resolution for VLM to prevent VRAM fragmentation/leaks
+                try:
+                    vlm_img = img_raw.copy().convert("RGB")
+                    vlm_img.thumbnail((1024, 1024), Image.Resampling.LANCZOS)
+                    buffered = io.BytesIO()
+                    vlm_img.save(buffered, format="JPEG", quality=85)
+                    b64_img = base64.b64encode(buffered.getvalue()).decode('utf-8')
+                    vlm_img.close()
+                except Exception as e:
+                    callbacks['log'](f"Error compressing image for VLM: {e}")
+                    continue
+
+                extracted_names = ""
+                if cfg['use_smart_extract']:
+                    matches = re.findall(r'(?:woman|man|girl|boy|character)\s+is\s+([a-zA-Z0-9\s]+?)(?:\s+and|\s*,|\.|$)', str(img_info), re.IGNORECASE)
+                    valid_names = [m.strip().title() for m in matches if len(m.strip()) > 1]
+                    if valid_names: extracted_names = f"\n\nCRITICAL CONTEXT: The metadata identifies characters as: {', '.join(valid_names)}."
+
+                meta_context = ""
+                if cfg['use_full_meta']:
+                    meta_data = img_info.get("parameters", img_info.get("prompt", str(img_info)[:2500]))
+                    meta_context = f"\n\nIMAGE CONCEPT DATA: {str(meta_data)[:2500]}"
+            
+                try:
+                    # ==========================================
+                    # 2-STEP AGENTIC CHAINING
+                    # ==========================================
+                    if cfg.get('dual_agent'):
+                        vlm_user_prompt = f"Describe the characters, their expressions, and the action happening in this scene in explicit detail.{meta_context}{extracted_names}"
+                        vlm_payload = {
+                            "model": "local-model",
+                            "messages": [
+                                {"role": "system", "content": cfg['sys_prompt']},
+                                {"role": "user", "content": [
+                                    {"type": "text", "text": vlm_user_prompt},
+                                    {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64_img}"}}
+                                ]}
+                            ],
+                            "temperature": cfg['temp'], "max_tokens": cfg['tokens']
+                        }
+                        callbacks['log']("-> Agent 1 (VLM) is analyzing the image...")
+                        v1_resp = http_session.post(cfg['api_url'], json=vlm_payload, timeout=120).json()
+                        scene_description = v1_resp.get("choices", [{}])[0].get("message", {}).get("content", "")
+                        callbacks['log'](f"-> Vision Report: {scene_description}")
+                    
+                        user_prompt_text = f"Based on this scene description: '{scene_description}', generate JSON dialogue for Character A and B.{meta_context}{extracted_names}"
+                        llm_payload = {
+                            "model": "local-model",
+                            "messages": [
+                                {"role": "system", "content": cfg.get('llm_sys_prompt', cfg['sys_prompt'])},
+                                {"role": "user", "content": user_prompt_text} 
+                            ],
+                            "temperature": cfg['temp'], "max_tokens": cfg['tokens']
+                        }
+                        callbacks['log']("-> Agent 2 (LLM) is writing the script...")
+                        response = http_session.post(cfg['llm_url'], json=llm_payload, timeout=120)
                 
-                # Pure extraction (No dict checking needed anymore)
-                char_a = str(vlm_data.get("char_a", "...")).strip()
-                char_b = str(vlm_data.get("char_b", "...")).strip()
+                    # ==========================================
+                    # STANDARD SINGLE VLM (Pure Fallback)
+                    # ==========================================
+                    else:
+                        user_prompt_text = f"Analyze this image and generate dialogue for Character A (Top) and Character B (Bottom) that logically continues the narrative.{meta_context}{extracted_names}"
+                        payload = {
+                            "model": "local-model",
+                            "messages": [
+                                {"role": "system", "content": cfg.get('fallback_prompt', cfg['sys_prompt'])},
+                                {"role": "user", "content": [{"type": "text", "text": user_prompt_text}, {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64_img}"}}]}
+                            ],
+                            "temperature": cfg['temp'], "max_tokens": cfg['tokens']
+                        }
+                        response = http_session.post(cfg['api_url'], json=payload, timeout=120)
 
-                callbacks['log'](f"Script Success! Char A: '{char_a}' | Char B: '{char_b}'")
+                    # --- Pure JSON Parsing ---
+                    if response.status_code != 200:
+                        callbacks['log'](f"❌ API Error {response.status_code}: {response.text}")
+                        continue
+                    
+                    response_data = response.json()
+                    raw_response = response_data.get("choices", [{}])[0].get("message", {}).get("content", "")
                 
-            except Exception as e:
-                callbacks['log'](f"VLM critical pipeline failure: {e}")
-                continue 
+                    if not raw_response or not str(raw_response).strip():
+                        callbacks['log'](f"❌ API returned an empty string. Raw Output: {response_data}")
+                        continue
 
-            results = model(img_path, conf=cfg['conf'], verbose=False)
-            face_boxes = [box for box in results[0].boxes if int(box.cls[0]) == 0]
-
-            faces_to_process = []
-            if len(face_boxes) >= 2:
-                sorted_faces = sorted(face_boxes, key=lambda x: x.xyxy[0][1].item())
-                faces_to_process = [(sorted_faces[0], char_a), (sorted_faces[-1], char_b)]
-            elif len(face_boxes) == 1:
-                faces_to_process = [(face_boxes[0], char_a)]
-
-            drawn_bubbles = [] 
-            for face_box, raw_text in faces_to_process:
-                wrapped_text = textwrap.fill(str(raw_text), width=15) 
+                    json_match = re.search(r'\{.*\}', raw_response, re.DOTALL)
+                    clean_json_str = json_match.group(0) if json_match else raw_response.strip()
+                    clean_json_str = re.sub(r'```json\s*|\s*```', '', clean_json_str).strip()
                 
-                x1, y1, x2, y2 = face_box.xyxy[0].tolist()
-                face_cx = (x1 + x2) / 2
+                    try:
+                        vlm_data = json.loads(clean_json_str)
+                    except json.JSONDecodeError:
+                        callbacks['log']("⚠️ AI failed to format JSON. Attempting raw text recovery...")
+                        vlm_data = {"char_a": raw_response.strip(), "char_b": "..."}
+                
+                    # Pure extraction (No dict checking needed anymore)
+                    char_a = str(vlm_data.get("char_a", "...")).strip()
+                    char_b = str(vlm_data.get("char_b", "...")).strip()
 
-                PipelineManager.draw_bubble(draw, wrapped_text, base_font, cfg['pad_x'], cfg['pad_y'], 
-                                            face_cx, y1, y2, img_pil.width, img_pil.height, 
-                                            drawn_bubbles, edge_map, cfg['tail_len'], cfg['tail_thick'], cfg['autofit'])
+                    callbacks['log'](f"Script Success! Char A: '{char_a}' | Char B: '{char_b}'")
+                
+                except Exception as e:
+                    callbacks['log'](f"VLM critical pipeline failure: {e}")
+                    continue 
 
-            callbacks['preview'](img_pil)
-            img_pil.convert("RGB").save(os.path.join(out_dir, filename))
-            img_pil.close()
-            img_raw.close()
-            callbacks['progress'](i+1, total_files)
+                results = model(img_path, conf=cfg['conf'], verbose=False)
+                face_boxes = [box for box in results[0].boxes if int(box.cls[0]) == 0]
+
+                faces_to_process = []
+                if len(face_boxes) >= 2:
+                    sorted_faces = sorted(face_boxes, key=lambda x: x.xyxy[0][1].item())
+                    faces_to_process = [(sorted_faces[0], char_a), (sorted_faces[-1], char_b)]
+                elif len(face_boxes) == 1:
+                    faces_to_process = [(face_boxes[0], char_a)]
+
+                drawn_bubbles = [] 
+                for face_box, raw_text in faces_to_process:
+                    wrapped_text = textwrap.fill(str(raw_text), width=15) 
+                
+                    x1, y1, x2, y2 = face_box.xyxy[0].tolist()
+                    face_cx = (x1 + x2) / 2
+
+                    PipelineManager.draw_bubble(draw, wrapped_text, base_font, cfg['pad_x'], cfg['pad_y'], 
+                                                face_cx, y1, y2, img_pil.width, img_pil.height, 
+                                                drawn_bubbles, edge_map, cfg['tail_len'], cfg['tail_thick'], cfg['autofit'])
+
+                callbacks['preview'](img_pil)
+                img_pil.convert("RGB").save(os.path.join(out_dir, filename))
+                img_pil.close()
+                img_raw.close()
+                callbacks['progress'](i+1, total_files)
+                break
 
         return True, "Finished VLM Batch!"
