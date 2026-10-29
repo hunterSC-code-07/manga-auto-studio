@@ -2,12 +2,13 @@ import { useState, useEffect } from 'react';
 import { 
   User, Users, Droplet, Brain, Tag, Tags, Image as ImageIcon, 
   Save, SaveAll, RefreshCw, PanelRightClose, PanelRightOpen, 
-  Scissors, ZoomIn, Brush, LayoutGrid, FileText, Database, Bot,CheckSquare ,PenTool 
+  Scissors, ZoomIn, Brush, LayoutGrid, FileText, Bot,CheckSquare ,PenTool, BookOpen 
 } from 'lucide-react';
 
 import PipelineTab from './components/PipelineTab';
 import DualTab from './components/DualTab';
 import VLMTab from './components/VLMTab';
+import StoryTab from './components/StoryTab';
 import AIStudioTab from './components/AIStudioTab';
 import WatermarkTab from './components/WatermarkTab';
 import PackagerTab from './components/PackagerTab';
@@ -17,7 +18,6 @@ import UpscalerTab from './components/UpscalerTab';
 import CleanerTab from './components/CleanerTab';
 import CompilerTab from './components/CompilerTab';
 import WildcardsTab from './components/WildcardsTab';
-import MemoryTab from './components/MemoryTab';
 import SandboxTab from './components/SandboxTab';
 import LiveMonitor from './components/LiveMonitor';
 import CullerTab from './components/CullerTab';
@@ -33,12 +33,14 @@ export default function App() {
     // Standard Pipeline
     in_dir: '', out_dir: '', wildcard_dir: '', model_path: 'face_yolov8s.pt',
     font_path: 'AnimeAce.ttf', default_file: 'captions.txt', font_size: 28,
+    bubble_size: 100,
     pad_x: 45, pad_y: 35, conf: 0.25, tail_len: 35, tail_thick: 0.15,
     autofit: true, safe_zones: true, needs_review: false, strip_meta: true,
     multicore: true, overwrite: false, custom_meta: '', mappings: [],
     
     // Dual Pipeline
     dual_in_dir: '', dual_out_dir: '', dual_char2_file: 'sub_captions.txt',
+    dual_bubble_size: 100,
 
     // VLM Pipeline
     vlm_in_dir: '', vlm_out_dir: '', vlm_model_path: 'face_yolov8s.pt',
@@ -47,11 +49,48 @@ export default function App() {
     vlm_dual_agent: false, 
     vlm_prompt: 'Describe the characters, their expressions, and the action happening in this scene in explicit detail.', 
     vlm_llm_prompt: 'You are an expert manga scriptwriter. Output ONLY valid JSON in this format: {"char_a": "...", "char_b": "..."}.', 
-    vlm_fallback_prompt: 'You are an expert manga scriptwriter. Analyze this image and output ONLY valid JSON: {"char_a": "...", "char_b": "..."}.',
+    vlm_fallback_prompt: 'You are an expert manga scriptwriter. Analyze this image and metadata. If characters belong to a known universe (e.g. Makima & Denji in Chainsaw Man), ground the scene in that universe lore. Output ONLY valid JSON: {"visual_action": "1-sentence physical act description", "submission_reason": "1-2 sentence coercive reason/universe leverage forcing his submission", "char_a": "dominant dialogue", "char_b": "submissive dialogue"}. CRITICAL: Output ONLY pure spoken dialogue without asterisks or quotes.',
     vlm_temp: 0.7, vlm_tokens: 300, vlm_font_path: 'AnimeAce.ttf', vlm_font_size: 28, 
+    vlm_bubble_size: 100,
     vlm_pad_x: 45, vlm_pad_y: 35, vlm_conf: 0.25, vlm_tail_len: 35, vlm_tail_thick: 0.15,
-    vlm_extract: true, vlm_full_meta: true, vlm_safe_zones: true, vlm_use_memory: true,
-    vlm_autofit: true, vlm_overwrite: false, vlm_external_memory: '',
+    vlm_extract: true, vlm_full_meta: true, vlm_safe_zones: true,
+    vlm_smart_roles: false, vlm_sanitize_meta: false,
+    vlm_autofit: true, vlm_overwrite: false,
+
+    // Continuous Manga Story Studio
+    story_in_dir: '', story_out_dir: '',
+    story_images: ['', '', '', '', ''],
+    story_url: 'http://127.0.0.1:1234/v1/chat/completions',
+    story_model_path: 'face_yolov8s.pt',
+    story_sys_prompt: '',
+    story_theme: '',
+    story_reading_dir: 'rtl',
+    story_layout: 'classic_5',
+    story_panels_per_page: 5,
+    story_gutter: 16,
+    story_border: 24,
+    story_bg_color: '#FFFFFF',
+    story_border_color: '#000000',
+    story_border_width: 3,
+    story_temp: 0.7,
+    story_tokens: 4000,
+    story_font_path: 'AnimeAce.ttf',
+    story_font_size: 28,
+    story_bubble_size: 100,
+    story_pad_x: 45,
+    story_pad_y: 35,
+    story_conf: 0.25,
+    story_tail_len: 35,
+    story_tail_thick: 0.15,
+    story_safe_zones: true,
+    story_autofit: true,
+    story_smart_roles: true,
+    story_ai_sequencing: true,
+    story_enable_captions: false,
+    story_enable_asides: false,
+    story_enable_monologues: false,
+    story_enable_command_bubbles: true,
+    story_auto_adjust_prompt: true,
 
     // AI Studio Settings
     ai_url: 'http://127.0.0.1:1234/v1/chat/completions',
@@ -148,6 +187,7 @@ export default function App() {
     { id: 'pipeline', label: 'Solo Auto-Typesetter', icon: <User size={20} /> },
     { id: 'dual', label: 'Duo Auto-Typesetter', icon: <Users size={20} /> },
     { id: 'vlm', label: 'AI Scene Director', icon: <Brain size={20} /> },
+    { id: 'story', label: 'Continuous Manga Story', icon: <BookOpen size={20} /> },
     { id: 'ai', label: 'LLM Script Studio', icon: <Bot size={20} /> },
     { id: 'watermark', label: 'Batch Watermarker', icon: <Droplet size={20} /> },
     { id: 'wildcards', label: 'Script & Wildcards', icon: <FileText size={20} /> },
@@ -157,7 +197,6 @@ export default function App() {
     { id: 'upscaler', label: 'Resolution Upscaler', icon: <ZoomIn size={20} /> },
     { id: 'compiler', label: 'Manga Page Stitcher', icon: <LayoutGrid size={20} /> },
     { id: 'packager', label: 'Reward Tier Allocator', icon: <Tag size={20} /> },
-    { id: 'memory', label: 'Global Lore Memory', icon: <Database size={20} /> },
 	{ id: 'culler', label: 'Smart Image Culler', icon: <CheckSquare size={20} /> },
     { id: 'sandbox', label: 'Visual Canvas Editor', icon: <PenTool size={20} /> },
   ];
@@ -220,6 +259,7 @@ export default function App() {
           {activeTab === 'pipeline' && <PipelineTab config={globalConfig} setConfig={setGlobalConfig} />}
           {activeTab === 'dual' && <DualTab config={globalConfig} setConfig={setGlobalConfig} />}
           {activeTab === 'vlm' && <VLMTab config={globalConfig} setConfig={setGlobalConfig} />}
+          {activeTab === 'story' && <StoryTab config={globalConfig} setConfig={setGlobalConfig} />}
           {activeTab === 'ai' && <AIStudioTab config={globalConfig} setConfig={setGlobalConfig} />}
           {activeTab === 'watermark' && <WatermarkTab config={globalConfig} setConfig={setGlobalConfig} />}
           {activeTab === 'wildcards' && <WildcardsTab config={globalConfig} setConfig={setGlobalConfig} />}
@@ -229,7 +269,6 @@ export default function App() {
           {activeTab === 'cleaner' && <CleanerTab config={globalConfig} setConfig={setGlobalConfig} />}
           {activeTab === 'compiler' && <CompilerTab config={globalConfig} setConfig={setGlobalConfig} />}
           {activeTab === 'packager' && <PackagerTab config={globalConfig} setConfig={setGlobalConfig} />}
-          {activeTab === 'memory' && <MemoryTab config={globalConfig} setConfig={setGlobalConfig} />}
 		  {activeTab === 'culler' && <CullerTab config={globalConfig} setConfig={setGlobalConfig} />}
           {activeTab === 'sandbox' && <SandboxTab config={globalConfig} setConfig={setGlobalConfig} />}
         </div>

@@ -47,6 +47,7 @@ export default function DualTab({ config, setConfig }) {
         default_file: config.dual_default_file || 'captions.txt',
         char2_file: config.dual_char2_file || 'sub_captions.txt',
         font_size: config.dual_font_size ?? 28,
+        bubble_size: config.dual_bubble_size ?? 100,
         pad_x: config.dual_pad_x ?? 45,
         pad_y: config.dual_pad_y ?? 35,
         conf: config.dual_conf ?? 0.25,
@@ -137,6 +138,7 @@ export default function DualTab({ config, setConfig }) {
              <Settings size={20} className="text-gray-400" /> Dual Bubble Tuning
            </h3>
            <div className="space-y-4">
+             <Slider label="Bubble Size" value={config.dual_bubble_size ?? 100} min={50} max={250} step={5} unit="%" onChange={(v) => updateConfig('dual_bubble_size', v)} />
              <Slider label="Font Size" value={config.dual_font_size ?? 28} min={16} max={48} onChange={(v) => updateConfig('dual_font_size', v)} />
              <Slider label="AI Strictness" value={config.dual_conf ?? 0.25} min={0.05} max={0.85} step={0.05} onChange={(v) => updateConfig('dual_conf', v)} />
              <Slider label="Width Pad (X)" value={config.dual_pad_x ?? 45} min={10} max={80} onChange={(v) => updateConfig('dual_pad_x', v)} />
@@ -189,12 +191,12 @@ function PathInput({ label, value, onChange, onBrowse }) {
   )
 }
 
-function Slider({ label, value, min, max, step = 1, onChange }) {
+function Slider({ label, value, min, max, step = 1, unit = "", onChange }) {
   return (
     <div>
       <div className="flex justify-between text-sm mb-1">
         <span className="text-gray-400">{label}</span>
-        <span className="text-white font-mono">{value}</span>
+        <span className="text-white font-mono">{value}{unit}</span>
       </div>
       <input type="range" min={min} max={max} step={step} value={value} onChange={(e) => onChange(parseFloat(e.target.value))} className="w-full accent-indigo-500 cursor-pointer" />
     </div>

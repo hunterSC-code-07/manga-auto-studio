@@ -29,6 +29,7 @@ from core_dataset import DatasetManager
 import textwrap
 from PIL import Image, ImageDraw, ImageFont
 from core_culler import CullerManager 
+from core_story import StoryManager 
 
 app = FastAPI()
 config_manager = ConfigManager()
@@ -159,6 +160,7 @@ class PipelineConfig(BaseModel):
     model_path: str
     font_path: str
     font_size: int
+    bubble_size: int = 100  # <--- Bubble size scale percentage (default 100%)
     pad_x: int
     pad_y: int
     conf: float
@@ -179,6 +181,10 @@ class PipelineConfig(BaseModel):
 pause_event = threading.Event()
 pause_event.set()
 stop_event = threading.Event()
+
+# Dedicated VLM thread tracking to prevent multiple concurrent batch runs
+active_vlm_thread = None
+vlm_stop_event = threading.Event()
 
 @app.post("/api/pipeline/start")
 async def start_pipeline(config: PipelineConfig, background_tasks: BackgroundTasks):
@@ -251,6 +257,7 @@ class VLMConfig(BaseModel):
     tokens: int
     font_path: str
     font_size: int
+    bubble_size: int = 100  # <--- Bubble size scale percentage (default 100%)
     pad_x: int
     pad_y: int
     conf: float
@@ -259,11 +266,23 @@ class VLMConfig(BaseModel):
     safe_zones: bool
     use_smart_extract: bool
     use_full_meta: bool
+    smart_roles: bool = False
+    sanitize_meta: bool = False
     autofit: bool
     overwrite: bool
 
 @app.post("/api/vlm/start")
 async def start_vlm(config: VLMConfig):
+    global active_vlm_thread
+    
+    # 1. Cleanly stop any existing running VLM thread before starting a new one
+    if active_vlm_thread and active_vlm_thread.is_alive():
+        vlm_stop_event.set()
+        active_vlm_thread.join(timeout=1.5)
+        if active_vlm_thread.is_alive():
+            await manager.broadcast({"type": "log", "data": "⚠️ Terminating previous active VLM pipeline before starting fresh batch..."})
+
+    vlm_stop_event.clear()
     stop_event.clear()
     cfg = config.model_dump()
 
@@ -285,19 +304,128 @@ async def start_vlm(config: VLMConfig):
     callbacks = {'log': log_cb, 'progress': prog_cb, 'preview': prev_cb}
 
     def run_job():
-        log_cb("👁️ Initializing VLM Comic Pipeline...")
-        success, msg = PipelineManager.process_vlm_batch(cfg, callbacks, pause_event, stop_event)
+        try:
+            log_cb("👁️ Initializing VLM Comic Pipeline...")
+            success, msg = PipelineManager.process_vlm_batch(cfg, callbacks, pause_event, vlm_stop_event)
+            log_cb(msg)
+        finally:
+            try:
+                asyncio.run(manager.broadcast({"type": "status", "pipeline": "vlm", "running": False}))
+            except Exception:
+                pass
+
+    active_vlm_thread = threading.Thread(target=run_job, daemon=True)
+    active_vlm_thread.start()
+    return {"status": "started"}
+
+@app.get("/api/vlm/status")
+def get_vlm_status():
+    running = bool(active_vlm_thread and active_vlm_thread.is_alive() and not vlm_stop_event.is_set())
+    return {"running": running}
+
+@app.post("/api/pipeline/stop")
+async def stop_pipeline():
+    stop_event.set()
+    vlm_stop_event.set()
+    await manager.broadcast({"type": "status", "pipeline": "vlm", "running": False})
+    await manager.broadcast({"type": "log", "data": "🛑 STOP COMMAND SENT."})
+    return {"status": "stopped"}
+
+# --- CONTINUOUS MANGA STORY PIPELINE ---
+class StoryConfig(BaseModel):
+    images: list[str] = []
+    in_dir: str = ""
+    out_dir: str = ""
+    model_path: str = "face_yolov8s.pt"
+    api_url: str = "http://127.0.0.1:1234/v1/chat/completions"
+    sys_prompt: str = ""
+    theme_prompt: str = ""
+    reading_direction: str = "rtl"
+    layout_preset: str = "classic_5"
+    panels_per_page: int = 5
+    gutter_size: int = 16
+    border_size: int = 24
+    bg_color: str = "#FFFFFF"
+    border_color: str = "#000000"
+    border_width: int = 3
+    temp: float = 0.7
+    tokens: int = 4000
+    font_path: str = "AnimeAce.ttf"
+    font_size: int = 28
+    bubble_size: int = 100
+    pad_x: int = 45
+    pad_y: int = 35
+    conf: float = 0.25
+    tail_len: int = 35
+    tail_thick: float = 0.15
+    safe_zones: bool = True
+    autofit: bool = True
+    smart_roles: bool = True
+    ai_sequencing: bool = True
+    enable_captions: bool = False
+    enable_asides: bool = False
+    enable_monologues: bool = False
+    enable_command_bubbles: bool = True
+    auto_adjust_prompt: bool = True
+
+@app.post("/api/story/start")
+async def start_story(config: StoryConfig):
+    stop_event.clear()
+    cfg = config.model_dump()
+
+    def log_cb(msg): asyncio.run(manager.broadcast({"type": "log", "data": msg}))
+    def prog_cb(current, total): asyncio.run(manager.broadcast({"type": "progress", "current": current, "total": total}))
+    def prev_cb(img):
+        try:
+            import io, base64
+            buffered = io.BytesIO()
+            preview_img = img.copy().convert("RGB")
+            preview_img.thumbnail((700, 850))
+            preview_img.save(buffered, format="JPEG", quality=85)
+            img_str = base64.b64encode(buffered.getvalue()).decode("utf-8")
+            asyncio.run(manager.broadcast({"type": "preview", "image": img_str}))
+        except Exception:
+            pass
+
+    def bcast_cb(data):
+        try: asyncio.run(manager.broadcast(data))
+        except Exception: pass
+
+    callbacks = {'log': log_cb, 'progress': prog_cb, 'preview': prev_cb, 'broadcast': bcast_cb}
+
+    def run_job():
+        log_cb("📖 Initializing Continuous Manga Story Studio...")
+        success, msg = StoryManager.process_story_comic(cfg, callbacks, pause_event, stop_event)
         log_cb(msg)
 
     threading.Thread(target=run_job, daemon=True).start()
     return {"status": "started"}
 
-@app.post("/api/pipeline/stop")
-async def stop_pipeline():
-    stop_event.set()
-    # NEW: We use 'await' here instead of asyncio.run because we are already inside an async function
-    await manager.broadcast({"type": "log", "data": "🛑 STOP COMMAND SENT."})
-    return {"status": "stopped"}
+@app.get("/api/story/scan-folder")
+def scan_story_folder(folder_path: str):
+    if not os.path.isdir(folder_path):
+        return {"success": False, "files": [], "message": "Directory not found"}
+    valid_exts = {".png", ".jpg", ".jpeg", ".webp", ".bmp"}
+    files = sorted([f for f in os.listdir(folder_path) if os.path.splitext(f)[1].lower() in valid_exts])
+    full_paths = [os.path.join(folder_path, f) for f in files]
+    return {"success": True, "files": full_paths, "filenames": files}
+
+@app.get("/api/image/thumbnail")
+def get_image_thumbnail(path: str):
+    if not path or not os.path.exists(path):
+        return {"success": False, "error": "File not found"}
+    try:
+        from PIL import Image
+        import io, base64
+        with Image.open(path) as img:
+            rgb = img.convert("RGB")
+            rgb.thumbnail((260, 260), Image.Resampling.LANCZOS)
+            buffered = io.BytesIO()
+            rgb.save(buffered, format="JPEG", quality=80)
+            b64_str = base64.b64encode(buffered.getvalue()).decode("utf-8")
+            return {"success": True, "thumbnail": b64_str}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
 
 # --- TIER PACKAGER EXECUTION ---
 class PackagerScanReq(BaseModel):

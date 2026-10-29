@@ -50,6 +50,7 @@ export default function PipelineTab({ config, setConfig }) {
       default_file: String(config.default_file || 'captions.txt'),
       char2_file: "", 
       font_size: parseInt(config.font_size ?? 28),
+      bubble_size: parseInt(config.bubble_size ?? 100),
       pad_x: parseInt(config.pad_x ?? 45),
       pad_y: parseInt(config.pad_y ?? 35),
       conf: parseFloat(config.conf ?? 0.25),
@@ -147,6 +148,7 @@ export default function PipelineTab({ config, setConfig }) {
              <Settings size={20} className="text-gray-400" /> Bubble Tuning
            </h3>
            <div className="space-y-4">
+             <Slider label="Bubble Size" value={config.bubble_size ?? 100} min={50} max={250} step={5} unit="%" onChange={(v) => updateConfig('bubble_size', v)} />
              <Slider label="Font Size" value={config.font_size ?? 28} min={16} max={48} onChange={(v) => updateConfig('font_size', v)} />
              <Slider label="AI Strictness" value={config.conf ?? 0.25} min={0.05} max={0.85} step={0.05} onChange={(v) => updateConfig('conf', v)} />
              <Slider label="Width Pad (X)" value={config.pad_x ?? 45} min={10} max={80} onChange={(v) => updateConfig('pad_x', v)} />
@@ -198,12 +200,12 @@ function PathInput({ label, value, onChange, onBrowse }) {
   )
 }
 
-function Slider({ label, value, min, max, step = 1, onChange }) {
+function Slider({ label, value, min, max, step = 1, unit = "", onChange }) {
   return (
     <div>
       <div className="flex justify-between text-sm mb-1">
         <span className="text-gray-400">{label}</span>
-        <span className="text-white font-mono">{value}</span>
+        <span className="text-white font-mono">{value}{unit}</span>
       </div>
       <input type="range" min={min} max={max} step={step} value={value} onChange={(e) => onChange(parseFloat(e.target.value))} className="w-full accent-accent cursor-pointer" />
     </div>

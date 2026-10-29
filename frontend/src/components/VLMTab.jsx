@@ -1,8 +1,25 @@
-import { useState } from 'react';
-import { Folder, Settings, Box, Play, Square, Brain, Plug, Database } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Folder, Settings, Box, Play, Square, Brain, Plug } from 'lucide-react';
 
 export default function VLMTab({ config, setConfig }) {
   const [isRunning, setIsRunning] = useState(false);
+
+  useEffect(() => {
+    let isMounted = true;
+    const checkStatus = async () => {
+      try {
+        const res = await fetch('http://127.0.0.1:8000/api/vlm/status');
+        const data = await res.json();
+        if (isMounted) setIsRunning(!!data.running);
+      } catch (e) {}
+    };
+    checkStatus();
+    const interval = setInterval(checkStatus, 2500);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, []);
 
   const updateConfig = (key, value) => setConfig(prev => ({ ...prev, [key]: value }));
 
@@ -29,6 +46,7 @@ export default function VLMTab({ config, setConfig }) {
   };
 
   const startPipeline = async () => {
+    if (isRunning) return;
     setIsRunning(true);
     const payload = {
         in_dir: config.vlm_in_dir || '',
@@ -43,7 +61,8 @@ export default function VLMTab({ config, setConfig }) {
         temp: config.vlm_temp ?? 0.7,
         tokens: config.vlm_tokens ?? 300,
         font_path: config.vlm_font_path || 'AnimeAce.ttf',
-        font_size: config.vlm_font_size ?? 28,
+        font_size: config.vlm_font_size ?? config.vlm_font ?? 28,
+        bubble_size: config.vlm_bubble_size ?? 100,
         pad_x: config.vlm_pad_x ?? 45,
         pad_y: config.vlm_pad_y ?? 35,
         conf: config.vlm_conf ?? 0.25,
@@ -52,8 +71,8 @@ export default function VLMTab({ config, setConfig }) {
         safe_zones: config.vlm_safe_zones ?? true,
         use_smart_extract: config.vlm_extract ?? true,
         use_full_meta: config.vlm_full_meta ?? true,
-        use_memory: config.vlm_use_memory ?? true,
-        external_memory: config.vlm_external_memory || '',
+        smart_roles: config.vlm_smart_roles ?? false,
+        sanitize_meta: config.vlm_sanitize_meta ?? false,
         autofit: config.vlm_autofit ?? true,
         overwrite: config.vlm_overwrite ?? false
     };
@@ -117,20 +136,6 @@ export default function VLMTab({ config, setConfig }) {
           </div>
         </div>
 
-        {/* --- STORY MEMORY BANK --- */}
-        <div className="bg-cardBg p-6 rounded-xl border border-gray-800 shadow-lg col-span-2">
-          <h3 className="text-lg font-semibold text-white mb-2 flex items-center gap-2">
-            <Database size={20} className="text-amber-500" /> External Story Memory Bank
-          </h3>
-          <p className="text-xs text-gray-400 mb-4">If the app crashes, write a quick summary here of what happened so the VLM remembers before resuming.</p>
-          <textarea 
-             rows={4} 
-             value={config.vlm_external_memory || ''} 
-             onChange={(e) => updateConfig('vlm_external_memory', e.target.value)} 
-             placeholder="e.g., Character A and B are running from a dragon..." 
-             className="w-full bg-[#0a0a0a] border border-gray-700 rounded-lg px-3 py-2 text-sm text-cyan-400 font-mono focus:outline-none focus:border-amber-500" 
-          />
-        </div>
 
         {/* --- DIRECTORIES CARD --- */}
         <div className="bg-cardBg p-6 rounded-xl border border-gray-800 shadow-lg col-span-2">
@@ -158,7 +163,8 @@ export default function VLMTab({ config, setConfig }) {
              <Slider label="Tokens" value={config.vlm_tokens ?? 300} min={50} max={32768} step={50} onChange={(v) => updateConfig('vlm_tokens', v)} color="accent-amber-500" />
              
              <div className="border-t border-gray-800 pt-4 mt-4 space-y-4">
-               <Slider label="Font Size" value={config.vlm_font_size ?? 28} min={16} max={48} onChange={(v) => updateConfig('vlm_font_size', v)} color="accent-rose-500" />
+               <Slider label="Bubble Size" value={config.vlm_bubble_size ?? 100} min={50} max={250} step={5} unit="%" onChange={(v) => updateConfig('vlm_bubble_size', v)} color="accent-rose-500" />
+               <Slider label="Font Size" value={config.vlm_font_size ?? config.vlm_font ?? 28} min={16} max={48} onChange={(v) => updateConfig('vlm_font_size', v)} color="accent-rose-500" />
                <Slider label="YOLO Strictness" value={config.vlm_conf ?? 0.25} min={0.05} max={0.85} step={0.05} onChange={(v) => updateConfig('vlm_conf', v)} color="accent-rose-500" />
                <Slider label="Width Pad (X)" value={config.vlm_pad_x ?? 45} min={10} max={80} onChange={(v) => updateConfig('vlm_pad_x', v)} color="accent-rose-500" />
                <Slider label="Height Pad (Y)" value={config.vlm_pad_y ?? 35} min={10} max={80} onChange={(v) => updateConfig('vlm_pad_y', v)} color="accent-rose-500" />
@@ -174,7 +180,8 @@ export default function VLMTab({ config, setConfig }) {
            </h3>
            <Toggle label="🧠 Smart Extract Names from Metadata" checked={!!config.vlm_extract} color="bg-blue-500" onChange={() => updateConfig('vlm_extract', !config.vlm_extract)} />
            <Toggle label="🧠 Inject Full Prompt into Context" checked={!!config.vlm_full_meta} color="bg-purple-500" onChange={() => updateConfig('vlm_full_meta', !config.vlm_full_meta)} />
-           <Toggle label="🧠 Inject Story Memory Context" checked={!!config.vlm_use_memory} color="bg-amber-500" onChange={() => updateConfig('vlm_use_memory', !config.vlm_use_memory)} />
+           <Toggle label="🎭 Smart AI Role Assignment (Model Decides Dominant/Submissive)" checked={!!config.vlm_smart_roles} color="bg-indigo-500" onChange={() => updateConfig('vlm_smart_roles', !config.vlm_smart_roles)} />
+           <Toggle label="🧹 Sanitize Metadata (Strip Sampler & Negative Prompt Noise)" checked={!!config.vlm_sanitize_meta} color="bg-emerald-500" onChange={() => updateConfig('vlm_sanitize_meta', !config.vlm_sanitize_meta)} />
            
            <div className="border-t border-gray-800 pt-4 mt-2 space-y-4">
              <Toggle label="Enable Dynamic Font Auto-Fit" checked={!!config.vlm_autofit} color="bg-rose-500" onChange={() => updateConfig('vlm_autofit', !config.vlm_autofit)} />
@@ -186,8 +193,12 @@ export default function VLMTab({ config, setConfig }) {
 
       {/* --- EXECUTION BUTTONS --- */}
       <div className="flex gap-4 pt-4">
-        <button onClick={startPipeline} className="flex-1 bg-rose-600 hover:bg-rose-700 text-white font-bold py-4 rounded-xl shadow-lg flex justify-center items-center gap-2 transition-all active:scale-[0.98]">
-          <Play fill="currentColor" /> START VLM COMIC BATCH
+        <button 
+          onClick={startPipeline} 
+          disabled={isRunning}
+          className={`flex-1 ${isRunning ? 'bg-gray-700 cursor-not-allowed opacity-60' : 'bg-rose-600 hover:bg-rose-700 active:scale-[0.98]'} text-white font-bold py-4 rounded-xl shadow-lg flex justify-center items-center gap-2 transition-all`}
+        >
+          <Play fill="currentColor" /> {isRunning ? 'BATCH IN PROGRESS...' : 'START VLM COMIC BATCH'}
         </button>
         <button onClick={stopPipeline} className="px-8 bg-red-500 hover:bg-red-600 text-white font-bold py-4 rounded-xl shadow-lg flex justify-center items-center gap-2 transition-all active:scale-[0.98]">
           <Square fill="currentColor" size={18} /> STOP
@@ -208,12 +219,12 @@ function PathInput({ label, value, onChange, onBrowse, hideBrowse = false }) {
   )
 }
 
-function Slider({ label, value, min, max, step = 1, onChange, color="accent-rose-500" }) {
+function Slider({ label, value, min, max, step = 1, unit = "", onChange, color="accent-rose-500" }) {
   return (
     <div>
       <div className="flex justify-between text-sm mb-1">
         <span className="text-gray-400">{label}</span>
-        <span className="text-white font-mono">{value}</span>
+        <span className="text-white font-mono">{value}{unit}</span>
       </div>
       <input type="range" min={min} max={max} step={step} value={value} onChange={(e) => onChange(parseFloat(e.target.value))} className={`w-full cursor-pointer ${color}`} />
     </div>
